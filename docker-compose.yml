@@ -7,7 +7,7 @@ services:
       - PYTHONPATH=/var/task/src:/var/task/lib
       - PATH=/var/task/bin
       - AWS_BUCKET_NAME='aws-ap-southeast-1-391032101322-marketprice-pipe'
-      - AWS_ACCESS_KEY_ID='AKIAJPDTF6XU7ZO53KHQ'
-      - AWS_SECRET_ACCESS_KEY='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'
+      - AWS_ACCESS_KEY_ID='AKIAVWC2ULHFJG47BFKC'
+      - AWS_SECRET_ACCESS_KEY='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'
     volumes:
       - ./src/:/var/task/src/

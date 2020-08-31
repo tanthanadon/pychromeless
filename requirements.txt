@@ -2,3 +2,4 @@ boto3==1.14.51
 botocore==1.17.51
 selenium==3.141.0
 chromedriver-binary==85.0.4183.87.0
+pandas==1.1.1
