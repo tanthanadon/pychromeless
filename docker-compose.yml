@@ -1,4 +1,4 @@
-version: "3"
+version: '3'
 
 services:
   lambda:
@@ -6,11 +6,5 @@ services:
     environment:
       - PYTHONPATH=/var/task/src:/var/task/lib
       - PATH=/var/task/bin
-<<<<<<< Updated upstream
-      - AWS_BUCKET_NAME='aws-ap-southeast-1-391032101322-marketprice-pipe'
-      - AWS_ACCESS_KEY_ID='AKIAVWC2ULHFJG47BFKC'
-      - AWS_SECRET_ACCESS_KEY='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'
-=======
->>>>>>> Stashed changes
     volumes:
       - ./src/:/var/task/src/

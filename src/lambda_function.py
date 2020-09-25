@@ -3,50 +3,45 @@ import time
 from webdriver_wrapper import WebDriverWrapper
 from selenium.webdriver.common.keys import Keys
 
+import json
 import boto3
-from botocore.config import Config
+# import pandas as pd
+from io import StringIO
 
-import pandas as pd
+def s3_handler(fileName, data):
+    s3 = boto3.client('s3')
+    bucket = 'freshket-raw-data'
 
+    # csv_buffer = StringIO()
+    # df.to_csv(csv_buffer)
+    uploadByteStream = bytes(json.dumps(data).encode('UTF-8'))
+    # response = s3.put_object(Bucket=bucket, Key=fileName, Body=csv_buffer.getvalue())
+    response = s3.put_object(Bucket=bucket, Key=fileName, Body=uploadByteStream)
+    return responses
 
-def connectS3():
-    # Hard coded strings as credentials, not recommended.
-    ACCESS_KEY = 'AKIAVWC2ULHFJG47BFKC'
-    SECRET_KEY = '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'
-    s3_resource = boto3.resource(
-        's3',
-        aws_access_key_id=ACCESS_KEY,
-        aws_secret_access_key=SECRET_KEY
-    )
-    return s3_resource
-
-
-def create_temp_file(size, file_name, file_content):
-    random_file_name = ''.join([str(uuid.uuid4().hex[:6]), file_name])
-    with open(random_file_name, 'w') as f:
-        f.write(str(file_content) * size)
-    return random_file_name
-
-
-def lambda_handler(*args, **kwargs):
-    s3_resource = connectS3()
+def lambda_handler(event, context):
     driver = WebDriverWrapper()
+    url = 'https://www.google.com/'
+    driver.get_url(url)
 
-    driver.get_url('https://www.google.com/')
     page_title = driver.get_page_title()
     print("--------------------------")
     print(page_title)
     print("--------------------------")
 
-    data = {'web': ['test', 'google'], 'page_title': ['page_test', page_title]}
-    df = pd.DataFrame(data)
-    print(df)
-    df.to_csv("data.csv", index=False)
-    Filename = "data.csv"
-    Bucketname = "aws-ap-southeast-1-391032101322-marketprice-pipe"
-
-    s3_resource.meta.client.upload_file(
-        Filename=Filename, Bucket=Bucketname,
-        Key=Filename)
-    print(s3_resource)
     driver.close()
+
+    # data = {url: page_title}
+    data = {}
+    data['url'] = url
+    data['page_title'] = page_title
+    print(data)
+    # df = pd.DataFrame(data.items(), columns=['url','page_title'])
+    # print(df)
+
+    fileType = '.json'
+    fileName = "data" + fileType
+    # Upload data as .csv file into S3
+    response = s3_handler(fileName, data)
+
+    return response
