@@ -2,3 +2,4 @@ selenium
 chromedriver-binary
 boto3
 botocore
+requests
