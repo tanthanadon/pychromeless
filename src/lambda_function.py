@@ -20,6 +20,11 @@ import requests
 import re
 from datetime import datetime
 
+from multiprocessing import Process, Pipe
+from multiprocessing.pool import ThreadPool
+
+import threading
+
 def s3_handler(fileName, data):
     s3 = boto3.client('s3')
     bucket = 'freshket-raw-data'
@@ -32,7 +37,6 @@ def s3_handler(fileName, data):
     return response
 
 def parsing(driver, category_name):
-    driver.get("https://www.makroclick.com/th/category/"+category_name)
     list_product_id = getElements(driver, "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[3]/div/div[2]/div[1]/div[2]/div/div/div/div/div/div[1]")
     list_product_name = getElements(driver, "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[3]/div/div[2]/div[1]/div[2]/div/div/div/div/div/a/div")
     list_product_unit_price = getElements(driver, "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[3]/div/div[2]/div[1]/div[2]/div/div/div/div/div/div[3]/div")
@@ -181,11 +185,44 @@ def run(driver):
         except TimeoutException:
             print("Loading took too much time!")
 
-def lambda_handler(event, context):
+def getCategoryLink(driver):
+    driver.get("https://www.makroclick.com/th/category/vegetable-and-fruit?menuFlagId=8&flag=true")
+    elements = driver.find_elements_by_xpath("/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[1]/div/div[2]/div/a")
+    links = []
+    for e in elements:
+        url = e.get_attribute("href")
+        links.append(url)
+        
+    return links
+
+threadLocal = threading.local()
+
+def get_driver():
+  driver = getattr(threadLocal, 'driver', None)
+  if driver is None:
     browser = WebDriverWrapper()
     driver = browser._driver
-    parsing(driver, "butchery")
+    setattr(threadLocal, 'driver', driver)
+  return driver
+
+def scrap(url):
+    category_name = url.split("https://www.makroclick.com/th/category/")[-1]
+    print(category_name)
+    driver = get_driver()
+    driver.get(url)
+    parsing(driver, category_name)
+
+
+def lambda_handler(event, context):
     
+    # parsing(driver, "butchery")
+    browser = WebDriverWrapper()
+    driver = browser._driver
+    links = getCategoryLink(driver)
+    
+    # print(links)
+    for url in links:
+        scrap(url)
     # view_all_button = driver.find_element_by_xpath("/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[2]/div[2]/div[1]/div/div[2]/div/div")
     # print(view_all_button)
 
