@@ -24,6 +24,9 @@ from multiprocessing import Process, Pipe
 from multiprocessing.pool import ThreadPool
 
 import threading
+import pandas as pd
+
+threadLocal = threading.local()
 
 def s3_handler(fileName, data):
     s3 = boto3.client('s3')
@@ -95,11 +98,15 @@ def scrollDown(driver):
         y += 500
         time.sleep(1)
 
-def getPages(driver):
+def getPages(driver, is_firstPage):
     try:
         delay = 20
         # Get all page links
-        XPATH_PAGE_MAIN = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div[3]/div/div[2]/div[2]/div/div"
+        XPATH_PAGE_MAIN = ""
+        if(is_firstPage):
+            XPATH_PAGE_MAIN = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div[3]/div/div[2]/div[2]/div/div"
+        else:
+            XPATH_PAGE_MAIN = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div/div[3]/div/div[2]/div/div"
         pages = WebDriverWait(driver, delay).until(EC.presence_of_all_elements_located((By.XPATH, XPATH_PAGE_MAIN)))
         return pages
     except TimeoutException:
@@ -114,11 +121,9 @@ def getNumberOfLastPage(driver):
     # print(driver.current_url)
     try:
         delay = 3
-        pages = getPages(driver)
-        size = len(pages)
         # print(size)
         XPATH_PAGE_MAIN = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div[3]/div/div[2]/div[2]/div/div"
-        XPATH_LAST_PAGE = XPATH_PAGE_MAIN + "[{0}]".format(size)
+        XPATH_LAST_PAGE = XPATH_PAGE_MAIN + "[{0}]".format(7)
         # print(XPATH_LAST_PAGE)
         last_page = WebDriverWait(driver, delay).until(EC.element_to_be_clickable((By.XPATH, XPATH_LAST_PAGE)))
         # last_page = driver.find_element_by_xpath(XPATH_LAST_PAGE)
@@ -134,6 +139,7 @@ def getNumberOfLastPage(driver):
         # Get the number of the last page (page=XX)
         numberOfLastPage = int(res[1].split("page=")[-1])
         # print(numberOfLastPage)
+
         # Get elements of the last pages
         return numberOfLastPage
     except TimeoutException:
@@ -149,42 +155,66 @@ def getNumberOfCategories(driver):
     category_elements = driver.find_elements_by_xpath(XPATH)
     return len(category_elements)
 
-def findPossiblePage(driver):
+def findPossiblePage(driver, is_firstPage):
     arr = []
-    pages = getPages(driver)
+    pages = getPages(driver, is_firstPage)
     for page in pages:
         if(page.text.isdigit()):
             arr.append(page.text)
+    return arr
             
-def extractData(category_url, category_name, number_pages):
-    # print(category_name)
-    driver = get_driver()
-    temp = []
-    for i in range(1, number_pages+1):
-        each_page = category_url + "?page=" + str(i)+"&all=true"
-        print(each_page)
-        driver.get(each_page)
-        # print(driver.current_url)
-
-        # Scroll down page to load images completely
-        # scrollDown(driver)
+def extractData(category_url):
+    try:
+        # Set up driver
+        driver = get_driver()
+        # Go to the main page for each category
+        driver.get(category_url)
+        # Get the category name
+        category_name = getCategoryName(category_url)
         
-        # Extract data from each page in the category page
-        data = parsing(driver, category_name)
-        # Extend data in temp list
-        temp.extend(data)
-        # print(temp)
-    
-    print(temp)
-    # df = pd.DataFrame(temp)
-    # print(df)
-    # df.to_csv("csv\makroClick\makroClick_{0}.csv".format(category_name), index=False)
+        temp = []
 
-    fileType = '.json'
-    fileName = "data" + fileType
-    # Upload data as .csv file into S3
-    # response = s3_handler(fileName, data)
-    # return response
+        current_page = 0
+        
+        # Click second link from the first element
+        XPATH_SECOND_PATH = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[3]/div/div[2]/div[2]/div/div[2]"
+        seocond_page = driver.find_element_by_xpath(XPATH_SECOND_PATH)
+        print(seocond_page)
+        driver.execute_script("arguments[0].click()", seocond_page)
+        time.sleep(3)
+        print(driver.current_url)
+
+        pages = getPages(driver, False)
+        # First round (Page 1 to 5)
+        for page in pages:
+            if(page.text.isdigit()):
+                driver.execute_script("arguments[0].click()", page)
+                # print(driver.current_url)
+                time.sleep(3)
+                # print(driver.current_url)
+
+                # Scroll down page to load images completely
+                # scrollDown(driver)
+                
+                # Extract data from each page in the category page
+                data = parsing_next(driver, category_name)
+                # Extend data in temp list
+                temp.extend(data)
+                # print(temp)
+        
+        # print(temp)
+        df = pd.DataFrame(temp)
+        print(df)
+        df.to_csv("src/csv/makroClick/makroClick_{0}.csv".format(category_name), index=False)
+
+        # fileType = '.json'
+        # fileName = "data" + fileType
+        # Upload data as .csv file into S3
+        # response = s3_handler(fileName, data)
+        # return response
+    except Exception:
+        # Skip that category when any errors occur
+        return
 
 def getCategoryLink(driver):
     driver.get("https://www.makroclick.com/th/category/vegetable-and-fruit?menuFlagId=8&flag=true")
@@ -196,8 +226,6 @@ def getCategoryLink(driver):
         
     return links
 
-threadLocal = threading.local()
-
 def get_driver():
   driver = getattr(threadLocal, 'driver', None)
   if driver is None:
@@ -206,36 +234,21 @@ def get_driver():
     setattr(threadLocal, 'driver', driver)
   return driver
 
-def scrap(driver, url):
+def getCategoryName(url):
     category_name = url.split("https://www.makroclick.com/th/category/")[-1]
-    # print(url)
-    driver = get_driver()
-    driver.get(url)
-    # number_pages = getNumberOfLastPage(driver)
-    XPATH_PAGE_MAIN = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div[3]/div/div[2]/div[2]/div/div"
-    XPATH_LAST_PAGE = XPATH_PAGE_MAIN + "[{0}]".format(2)
-    # print(XPATH_LAST_PAGE)
-    second_page = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, XPATH_LAST_PAGE)))
-    # print(second_page)
-    driver.execute_script("arguments[0].click()", second_page)
-    time.sleep(3)
-    print(driver.current_url)
-    parsing_next(driver, category_name)
-    # print(number_pages)
-    # extractData(url, category_name, number_pages)
+    return category_name
 
-def lambda_handler(event, context):
-    
-    # parsing(driver, "butchery")
+def run():
     browser = WebDriverWrapper()
     driver = browser._driver
     links = getCategoryLink(driver)
 
     # print(links)
     for url in links:
-        # print(driver.current_url)
-        scrap(driver, url)
+        extractData(url)
 
+def lambda_handler(event, context):
+    run()
     # print(driver.title)
     # run(driver)
 

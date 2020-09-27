@@ -37,6 +37,8 @@ class WebDriverWrapper:
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--window-size=1920x1080')
+        chrome_options.add_argument('start-maximised')
+        chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument('--user-data-dir={}'.format(self._tmp_folder + '/user-data'))
         chrome_options.add_argument('--hide-scrollbars')
         chrome_options.add_argument('--enable-logging')
