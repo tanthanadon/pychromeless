@@ -100,7 +100,7 @@ def scrollDown(driver):
 
 def getPages(driver, is_firstPage):
     try:
-        delay = 20
+        delay = 3
         # Get all page links
         XPATH_PAGE_MAIN = ""
         if(is_firstPage):
@@ -121,9 +121,11 @@ def getNumberOfLastPage(driver):
     # print(driver.current_url)
     try:
         delay = 3
+        pages = getPages(driver, True)
+        size = len(pages)
         # print(size)
         XPATH_PAGE_MAIN = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div[3]/div/div[2]/div[2]/div/div"
-        XPATH_LAST_PAGE = XPATH_PAGE_MAIN + "[{0}]".format(7)
+        XPATH_LAST_PAGE = XPATH_PAGE_MAIN + "[{0}]".format(size)
         # print(XPATH_LAST_PAGE)
         last_page = WebDriverWait(driver, delay).until(EC.element_to_be_clickable((By.XPATH, XPATH_LAST_PAGE)))
         # last_page = driver.find_element_by_xpath(XPATH_LAST_PAGE)
@@ -162,57 +164,88 @@ def findPossiblePage(driver, is_firstPage):
         if(page.text.isdigit()):
             arr.append(page.text)
     return arr
-            
-def extractData(category_url):
+
+def getCurrentPage(driver):
+    try:
+        XPATH_PAGE_MAIN = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div/div[3]/div/div[2]/div/div[7]"
+        current_page = WebDriverWait(driver, 1).until(EC.element_to_be_clickable((By.XPATH, XPATH_PAGE_MAIN)))
+        return current_page
+    except TimeoutException:
+        return
+
+def extractData(driver, category_url):
     try:
         # Set up driver
-        driver = get_driver()
+        # driver = get_driver()
         # Go to the main page for each category
         driver.get(category_url)
+        # Get the total pages for each category
+        total_page = getNumberOfLastPage(driver)
+        # Go back to the main page
+        driver.back()
+        # print("======Total Page======")
+        # print(total_page)
+        
+        # Go back to the main page
+        # driver.back()
+        # print(total_page)
         # Get the category name
         category_name = getCategoryName(category_url)
         
         temp = []
 
-        current_page = 0
+        # Scroll down
+        # element = driver.find_element_by_xpath("/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]")
+        # driver.execute_script("arguments[0].scrollIntoView();", element)
         
-        # Click second link from the first element
-        XPATH_SECOND_PATH = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[3]/div/div[2]/div[2]/div/div[2]"
-        seocond_page = driver.find_element_by_xpath(XPATH_SECOND_PATH)
-        print(seocond_page)
-        driver.execute_script("arguments[0].click()", seocond_page)
-        time.sleep(3)
+        # Collect data from the first page
+        data = parsing(driver, category_name)
+        temp.append(data)
         print(driver.current_url)
 
-        pages = getPages(driver, False)
-        # First round (Page 1 to 5)
-        for page in pages:
-            if(page.text.isdigit()):
-                driver.execute_script("arguments[0].click()", page)
-                # print(driver.current_url)
-                time.sleep(3)
-                # print(driver.current_url)
+        for i in range(total_page-1):
+            if(i==0):
+                XPATH_NEXT_PAGE = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div[3]/div/div[2]/div[2]/div/div[6]"
+            else:
+                XPATH_NEXT_PAGE = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div/div[3]/div/div[2]/div/div[7]"
+            next_button = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, XPATH_NEXT_PAGE)))
+            # print(seocond_page)
+            driver.execute_script("arguments[0].click()", next_button)
+            time.sleep(1)
+            print(driver.current_url)
+            data_second = parsing_next(driver, category_name)
+            temp.append(data_second)
 
-                # Scroll down page to load images completely
-                # scrollDown(driver)
-                
-                # Extract data from each page in the category page
-                data = parsing_next(driver, category_name)
-                # Extend data in temp list
-                temp.extend(data)
-                # print(temp)
-        
-        # print(temp)
-        df = pd.DataFrame(temp)
-        print(df)
-        df.to_csv("src/csv/makroClick/makroClick_{0}.csv".format(category_name), index=False)
+
+        # Now, we are on the second page (Code structure is changed!)
+
+
+
+        # Click second link from the first element
+        # XPATH_SECOND_PATH = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[3]/div/div[2]/div[2]/div/div[2]"
+        # second_page = driver.find_element_by_xpath(XPATH_SECOND_PATH)
+        # # print(seocond_page)
+        # driver.execute_script("arguments[0].click()", second_page)
+        # time.sleep(0.1)
+
+        # pages = getPages(driver, False)
+        # current_page, num_page = traversal(driver, pages, 1)
+        # print(current_page, num_page)
+        # driver.execute_script("arguments[0].click()", current_page)
+        # print(driver.current_url)
+        # time.sleep(0.1)
+
+        # df = pd.DataFrame(temp)
+        # print(df)
+        # df.to_csv("src/csv/makroClick/makroClick_{0}.csv".format(category_name), index=False)
 
         # fileType = '.json'
         # fileName = "data" + fileType
         # Upload data as .csv file into S3
         # response = s3_handler(fileName, data)
         # return response
-    except Exception:
+    except Exception as e:
+        print("Extract Error:"+str(e))
         # Skip that category when any errors occur
         return
 
@@ -245,7 +278,7 @@ def run():
 
     # print(links)
     for url in links:
-        extractData(url)
+        extractData(driver, url)
 
 def lambda_handler(event, context):
     run()
