@@ -24,11 +24,13 @@ from multiprocessing import Process, Pipe
 from multiprocessing.pool import ThreadPool
 
 import threading
-import pandas as pd
+# import pandas as pd
 
-threadLocal = threading.local()
+# threadLocal = threading.local()
 
-def s3_handler(fileName, data):
+from datetime import datetime
+
+def s3_handler(full_path, data):
     s3 = boto3.client('s3')
     bucket = 'freshket-raw-data'
 
@@ -36,7 +38,7 @@ def s3_handler(fileName, data):
     # df.to_csv(csv_buffer)
     uploadByteStream = bytes(json.dumps(data).encode('UTF-8'))
     # response = s3.put_object(Bucket=bucket, Key=fileName, Body=csv_buffer.getvalue())
-    response = s3.put_object(Bucket=bucket, Key=fileName, Body=uploadByteStream)
+    response = s3.put_object(Bucket=bucket, Key=full_path, Body=uploadByteStream)
     return response
 
 def parsing(driver, category_name):
@@ -52,7 +54,7 @@ def parsing(driver, category_name):
         product_price = raw_product_price.text.split(' ')[0].strip()
         product_unit_price = raw_product_unit_price.text.split(' ')[2].strip()
         product_image = raw_product_image.get_attribute("src")
-        data.append({"category_name_th": category_name, "makroClick_id": product_id,"product_name": product_name, "product_price": product_price, "unit_price": product_unit_price, "product_image": product_image, "date": datetime.now()})
+        data.append({"category_name_th": category_name, "product_id": product_id,"product_name": product_name, "product_price": product_price, "unit_price": product_unit_price, "product_image": product_image, "collect_date": datetime.now()})
         # print(product_id, product_name, product_price, product_unit_price)
     print(data)
     # Return data from each page
@@ -186,9 +188,6 @@ def extractData(driver, category_url):
         # print("======Total Page======")
         # print(total_page)
         
-        # Go back to the main page
-        # driver.back()
-        # print(total_page)
         # Get the category name
         category_name = getCategoryName(category_url)
         
@@ -201,7 +200,7 @@ def extractData(driver, category_url):
         # Collect data from the first page
         data = parsing(driver, category_name)
         temp.append(data)
-        print(driver.current_url)
+        # print(driver.current_url)
 
         for i in range(total_page-1):
             if(i==0):
@@ -212,38 +211,21 @@ def extractData(driver, category_url):
             # print(seocond_page)
             driver.execute_script("arguments[0].click()", next_button)
             time.sleep(1)
-            print(driver.current_url)
+            # print(driver.current_url)
             data_second = parsing_next(driver, category_name)
             temp.append(data_second)
-
-
-        # Now, we are on the second page (Code structure is changed!)
-
-
-
-        # Click second link from the first element
-        # XPATH_SECOND_PATH = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[3]/div/div[2]/div[2]/div/div[2]"
-        # second_page = driver.find_element_by_xpath(XPATH_SECOND_PATH)
-        # # print(seocond_page)
-        # driver.execute_script("arguments[0].click()", second_page)
-        # time.sleep(0.1)
-
-        # pages = getPages(driver, False)
-        # current_page, num_page = traversal(driver, pages, 1)
-        # print(current_page, num_page)
-        # driver.execute_script("arguments[0].click()", current_page)
-        # print(driver.current_url)
-        # time.sleep(0.1)
 
         # df = pd.DataFrame(temp)
         # print(df)
         # df.to_csv("src/csv/makroClick/makroClick_{0}.csv".format(category_name), index=False)
 
-        # fileType = '.json'
-        # fileName = "data" + fileType
+        now = datetime.now()
+        dt_tring = now.strftime("%Y_%m_%d_%H_%M_S")
+        fileName = "{0}_{1}.json".format(dt_tring, category_name)
+        full_path = "csv/makroClick/{}".format(fileName)
         # Upload data as .csv file into S3
-        # response = s3_handler(fileName, data)
-        # return response
+        response = s3_handler(full_path, data)
+        return response
     except Exception as e:
         print("Extract Error:"+str(e))
         # Skip that category when any errors occur
