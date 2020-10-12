@@ -28,15 +28,16 @@ import threading
 
 # threadLocal = threading.local()
 
-from datetime import datetime
+big = []
 
 def s3_handler(full_path, data):
     s3 = boto3.client('s3')
-    bucket = 'freshket-raw-data'
+    bucket = 'freshket-marketprice'
 
     # csv_buffer = StringIO()
     # df.to_csv(csv_buffer)
-    uploadByteStream = bytes(json.dumps(data).encode('UTF-8'))
+    uploadByteStream = json.dumps(data, indent=4, sort_keys=True, default=str)
+    # uploadByteStream = bytes(json.dumps(data).encode('UTF-8'))efault).encode('UTF-8')
     # response = s3.put_object(Bucket=bucket, Key=fileName, Body=csv_buffer.getvalue())
     response = s3.put_object(Bucket=bucket, Key=full_path, Body=uploadByteStream)
     return response
@@ -54,11 +55,13 @@ def parsing(driver, category_name):
         product_price = raw_product_price.text.split(' ')[0].strip()
         product_unit_price = raw_product_unit_price.text.split(' ')[2].strip()
         product_image = raw_product_image.get_attribute("src")
-        data.append({"category_name_th": category_name, "product_id": product_id,"product_name": product_name, "product_price": product_price, "unit_price": product_unit_price, "product_image": product_image, "collect_date": datetime.now()})
+        now = datetime.now()
+        collect_date = now.strftime("%Y-%m-%d %H:%M:%S")
+        big.append({"category_name_th": category_name, "product_id": product_id,"product_name": product_name, "product_price": product_price, "unit_price": product_unit_price, "product_image": product_image, "collect_date": collect_date})
         # print(product_id, product_name, product_price, product_unit_price)
-    print(data)
+    # print(data)
     # Return data from each page
-    return data
+    # return data
 
 def parsing_next(driver, category_name):
     list_product_id = getElements(driver, "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div/div[3]/div/div[1]/div[2]/div/div/div/div/div/div[1]")
@@ -73,11 +76,11 @@ def parsing_next(driver, category_name):
         product_price = raw_product_price.text.split(' ')[0].strip()
         product_unit_price = raw_product_unit_price.text.split(' ')[2].strip()
         product_image = raw_product_image.get_attribute("src")
-        data.append({"category_name_th": category_name, "makroClick_id": product_id,"product_name": product_name, "product_price": product_price, "unit_price": product_unit_price, "product_image": product_image, "date": datetime.now()})
+        big.append({"category_name_th": category_name, "makroClick_id": product_id,"product_name": product_name, "product_price": product_price, "unit_price": product_unit_price, "product_image": product_image, "collect_date": datetime.now()})
         # print(product_id, product_name, product_price, product_unit_price)
-    print(data)
+    # print(data)
     # Return data from each page
-    return data
+    # return data
 
 def getElements(driver, XPATH):
     try:
@@ -198,8 +201,8 @@ def extractData(driver, category_url):
         # driver.execute_script("arguments[0].scrollIntoView();", element)
         
         # Collect data from the first page
-        data = parsing(driver, category_name)
-        temp.append(data)
+        parsing(driver, category_name)
+        # temp.append(data)
         # print(driver.current_url)
 
         for i in range(total_page-1):
@@ -212,19 +215,20 @@ def extractData(driver, category_url):
             driver.execute_script("arguments[0].click()", next_button)
             time.sleep(1)
             # print(driver.current_url)
-            data_second = parsing_next(driver, category_name)
-            temp.append(data_second)
+            parsing_next(driver, category_name)
+            # temp.append(data_second)
 
+        # print(big)
         # df = pd.DataFrame(temp)
         # print(df)
         # df.to_csv("src/csv/makroClick/makroClick_{0}.csv".format(category_name), index=False)
 
-        now = datetime.now()
-        dt_tring = now.strftime("%Y_%m_%d_%H_%M_S")
-        fileName = "{0}_{1}.json".format(dt_tring, category_name)
-        full_path = "csv/makroClick/{}".format(fileName)
+        # now = datetime.now()
+        # dt_tring = now.strftime("%Y_%m_%d_%H_%M_S")
+        fileName = "{}.json".format(category_name)
+        # full_path = "csv/makroClick/{}".format(fileName)
         # Upload data as .csv file into S3
-        response = s3_handler(full_path, data)
+        response = s3_handler(fileName, big)
         return response
     except Exception as e:
         print("Extract Error:"+str(e))
@@ -258,12 +262,15 @@ def run():
     driver = browser._driver
     links = getCategoryLink(driver)
 
+    # responses = []
     # print(links)
-    for url in links:
-        extractData(driver, url)
-
+    response = extractData(driver, links[0])
+    # for url in links:
+    #     response = extractData(driver, url)
+    #     responses.append(response)
+    return response
 def lambda_handler(event, context):
-    run()
+    response = run()
     # print(driver.title)
     # run(driver)
 
@@ -280,4 +287,4 @@ def lambda_handler(event, context):
     # # Upload data as .csv file into S3
     # response = s3_handler(fileName, data)
 
-    return {"Status": "Done"}
+    return {"Status": "Done", "Response": response}
