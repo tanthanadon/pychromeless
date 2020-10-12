@@ -28,7 +28,15 @@ import threading
 
 # threadLocal = threading.local()
 
-big = []
+# Global array
+# big = []
+
+# Global response
+responses = []
+
+# WebDriver
+browser = WebDriverWrapper()
+driver = browser._driver
 
 def s3_handler(full_path, data):
     s3 = boto3.client('s3')
@@ -42,7 +50,7 @@ def s3_handler(full_path, data):
     response = s3.put_object(Bucket=bucket, Key=full_path, Body=uploadByteStream)
     return response
 
-def parsing(driver, category_name):
+def parsing(category_name):
     list_product_id = getElements(driver, "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[3]/div/div[2]/div[1]/div[2]/div/div/div/div/div/div[1]")
     list_product_name = getElements(driver, "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[3]/div/div[2]/div[1]/div[2]/div/div/div/div/div/a/div")
     list_product_unit_price = getElements(driver, "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div[3]/div/div[2]/div[1]/div[2]/div/div/div/div/div/div[3]/div")
@@ -57,13 +65,13 @@ def parsing(driver, category_name):
         product_image = raw_product_image.get_attribute("src")
         now = datetime.now()
         collect_date = now.strftime("%Y-%m-%d %H:%M:%S")
-        big.append({"category_name_th": category_name, "product_id": product_id,"product_name": product_name, "product_price": product_price, "unit_price": product_unit_price, "product_image": product_image, "collect_date": collect_date})
+        data.append({"category_name_th": category_name, "product_id": product_id,"product_name": product_name, "product_price": product_price, "unit_price": product_unit_price, "product_image": product_image, "collect_date": collect_date})
         # print(product_id, product_name, product_price, product_unit_price)
     # print(data)
     # Return data from each page
-    # return data
+    return data
 
-def parsing_next(driver, category_name):
+def parsing_next(category_name):
     list_product_id = getElements(driver, "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div/div[3]/div/div[1]/div[2]/div/div/div/div/div/div[1]")
     list_product_name = getElements(driver, "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div/div[3]/div/div[1]/div[2]/div/div/div/div/div/a/div")
     list_product_unit_price = getElements(driver, "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div/div[3]/div/div[1]/div[2]/div/div/div/div/div/div[3]/div")
@@ -76,11 +84,11 @@ def parsing_next(driver, category_name):
         product_price = raw_product_price.text.split(' ')[0].strip()
         product_unit_price = raw_product_unit_price.text.split(' ')[2].strip()
         product_image = raw_product_image.get_attribute("src")
-        big.append({"category_name_th": category_name, "makroClick_id": product_id,"product_name": product_name, "product_price": product_price, "unit_price": product_unit_price, "product_image": product_image, "collect_date": datetime.now()})
+        data.append({"category_name_th": category_name, "makroClick_id": product_id,"product_name": product_name, "product_price": product_price, "unit_price": product_unit_price, "product_image": product_image, "collect_date": datetime.now()})
         # print(product_id, product_name, product_price, product_unit_price)
     # print(data)
     # Return data from each page
-    # return data
+    return data
 
 def getElements(driver, XPATH):
     try:
@@ -103,7 +111,7 @@ def scrollDown(driver):
         y += 500
         time.sleep(1)
 
-def getPages(driver, is_firstPage):
+def getPages(is_firstPage):
     try:
         delay = 3
         # Get all page links
@@ -119,14 +127,14 @@ def getPages(driver, is_firstPage):
         # Return -1
         return [None]*10
 
-def getNumberOfLastPage(driver):
+def getNumberOfLastPage():
     # Get elements of pages
     # page = driver.find_elements_by_xpath("/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div/div/div[3]/div/div[2]/div/div")
     # print(page[-1].text)
     # print(driver.current_url)
     try:
         delay = 3
-        pages = getPages(driver, True)
+        pages = getPages(True)
         size = len(pages)
         # print(size)
         XPATH_PAGE_MAIN = "/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[2]/div[1]/div[3]/div/div[2]/div[2]/div/div"
@@ -162,9 +170,9 @@ def getNumberOfCategories(driver):
     category_elements = driver.find_elements_by_xpath(XPATH)
     return len(category_elements)
 
-def findPossiblePage(driver, is_firstPage):
+def findPossiblePage(is_firstPage):
     arr = []
-    pages = getPages(driver, is_firstPage)
+    pages = getPages(is_firstPage)
     for page in pages:
         if(page.text.isdigit()):
             arr.append(page.text)
@@ -178,14 +186,14 @@ def getCurrentPage(driver):
     except TimeoutException:
         return
 
-def extractData(driver, category_url):
+def extractData(category_url):
     try:
         # Set up driver
         # driver = get_driver()
         # Go to the main page for each category
         driver.get(category_url)
         # Get the total pages for each category
-        total_page = getNumberOfLastPage(driver)
+        total_page = getNumberOfLastPage()
         # Go back to the main page
         driver.back()
         # print("======Total Page======")
@@ -201,8 +209,8 @@ def extractData(driver, category_url):
         # driver.execute_script("arguments[0].scrollIntoView();", element)
         
         # Collect data from the first page
-        parsing(driver, category_name)
-        # temp.append(data)
+        data = parsing(category_name)
+        temp.append(data)
         # print(driver.current_url)
 
         for i in range(total_page-1):
@@ -215,8 +223,8 @@ def extractData(driver, category_url):
             driver.execute_script("arguments[0].click()", next_button)
             time.sleep(1)
             # print(driver.current_url)
-            parsing_next(driver, category_name)
-            # temp.append(data_second)
+            data_second = parsing_next(category_name)
+            temp.append(data_second)
 
         # print(big)
         # df = pd.DataFrame(temp)
@@ -228,14 +236,14 @@ def extractData(driver, category_url):
         fileName = "{}.json".format(category_name)
         # full_path = "csv/makroClick/{}".format(fileName)
         # Upload data as .csv file into S3
-        response = s3_handler(fileName, big)
-        return response
+        response = s3_handler(fileName, temp)
+        responses.append(response)
     except Exception as e:
         print("Extract Error:"+str(e))
         # Skip that category when any errors occur
         return
 
-def getCategoryLink(driver):
+def getCategoryLink():
     driver.get("https://www.makroclick.com/th/category/vegetable-and-fruit?menuFlagId=8&flag=true")
     elements = driver.find_elements_by_xpath("/html/body/div[1]/div/div/div[3]/div/div/div[1]/div[2]/div[1]/div/div[2]/div/a")
     links = []
@@ -245,32 +253,33 @@ def getCategoryLink(driver):
         
     return links
 
-def get_driver():
-  driver = getattr(threadLocal, 'driver', None)
-  if driver is None:
-    browser = WebDriverWrapper()
-    driver = browser._driver
-    setattr(threadLocal, 'driver', driver)
-  return driver
+# def get_driver():
+#   driver = getattr(threadLocal, 'driver', None)
+#   if driver is None:
+#     browser = WebDriverWrapper()
+#     driver = browser._driver
+#     setattr(threadLocal, 'driver', driver)
+#   return driver
 
 def getCategoryName(url):
     category_name = url.split("https://www.makroclick.com/th/category/")[-1]
     return category_name
 
 def run():
-    browser = WebDriverWrapper()
-    driver = browser._driver
-    links = getCategoryLink(driver)
+    links = getCategoryLink()
 
     # responses = []
     # print(links)
-    response = extractData(driver, links[0])
+    # extractData(links)
     # for url in links:
     #     response = extractData(driver, url)
     #     responses.append(response)
-    return response
+    for url in links:
+        extractData(url)
+
 def lambda_handler(event, context):
-    response = run()
+    run()
+    # print(big)
     # print(driver.title)
     # run(driver)
 
@@ -287,4 +296,4 @@ def lambda_handler(event, context):
     # # Upload data as .csv file into S3
     # response = s3_handler(fileName, data)
 
-    return {"Status": "Done", "Response": response}
+    return responses
